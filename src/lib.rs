@@ -83,59 +83,6 @@ impl EphemeralPublic {
         Self(cp.0 + sp.0)
     }
 }
-pub trait ToBytes {
-    fn to_bytes(&self) -> [u8; 32];
-}
-impl ToBytes for ViewSecret {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_bytes()
-    }
-}
-impl ToBytes for ViewPublic {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.compress().to_bytes()
-    }
-}
-impl ToBytes for SpendSecret {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_bytes()
-    }
-}
-impl ToBytes for SpendPublic {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.compress().to_bytes()
-    }
-}
-impl ToBytes for RSecret {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_bytes()
-    }
-}
-impl ToBytes for RPublic {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.compress().to_bytes()
-    }
-}
-impl ToBytes for CSecret {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_bytes()
-    }
-}
-impl ToBytes for CPublic {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.compress().to_bytes()
-    }
-}
-impl ToBytes for EphemeralSecret {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_bytes()
-    }
-}
-impl ToBytes for EphemeralPublic {
-    fn to_bytes(&self) -> [u8; 32] {
-        self.0.compress().to_bytes()
-    }
-}
 #[cfg(test)]
 mod test {
     use super::*;
