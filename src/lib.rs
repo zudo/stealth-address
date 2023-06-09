@@ -28,11 +28,11 @@ impl StealthAddress {
     }
     pub fn from_slice(bytes: &[u8; 64]) -> Option<StealthAddress> {
         let s = CompressedRistretto::from_slice(&bytes[..32])
-            .ok()
-            .and_then(|x| x.decompress())?;
+            .unwrap()
+            .decompress()?;
         let b = CompressedRistretto::from_slice(&bytes[32..])
-            .ok()
-            .and_then(|x| x.decompress())?;
+            .unwrap()
+            .decompress()?;
         Some(StealthAddress { s, b })
     }
 }
