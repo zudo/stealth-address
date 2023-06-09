@@ -2,6 +2,7 @@ pub mod recv;
 pub mod scalar;
 pub mod send;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::RistrettoPoint;
 use curve25519_dalek::Scalar;
 use rand_core::CryptoRngCore;
@@ -17,6 +18,23 @@ pub struct ViewKey {
 pub struct SpendKey {
     s: Scalar,
     b: Scalar,
+}
+impl StealthAddress {
+    pub fn to_bytes(&self) -> [u8; 64] {
+        let mut bytes = [0; 64];
+        bytes[..32].copy_from_slice(self.s.compress().as_bytes());
+        bytes[32..].copy_from_slice(self.b.compress().as_bytes());
+        bytes
+    }
+    pub fn from_slice(bytes: &[u8; 64]) -> Option<StealthAddress> {
+        let s = CompressedRistretto::from_slice(&bytes[..32])
+            .ok()
+            .and_then(|x| x.decompress())?;
+        let b = CompressedRistretto::from_slice(&bytes[32..])
+            .ok()
+            .and_then(|x| x.decompress())?;
+        Some(StealthAddress { s, b })
+    }
 }
 impl SpendKey {
     pub fn new(rng: &mut impl CryptoRngCore) -> SpendKey {
