@@ -42,18 +42,17 @@ mod test {
     use super::*;
     use rand_core::OsRng;
     use sha2::Sha256;
-    #[allow(non_snake_case)]
     #[test]
     fn test() {
         let rng = &mut OsRng;
         let spend_key = SpendKey::new(rng);
         let stealth_address = spend_key.stealth_address();
         let view_key = spend_key.view_key();
-        let (r, R) = send::r(rng);
-        let send_ephemeral_public = send::ephemeral_public::<Sha256>(stealth_address, r);
-        let recv_ephemeral_public = recv::ephemeral_public::<Sha256>(view_key, R);
+        let (r_secret, r_public) = send::r(rng);
+        let send_ephemeral_public = send::ephemeral_public::<Sha256>(stealth_address, r_secret);
+        let recv_ephemeral_public = recv::ephemeral_public::<Sha256>(view_key, r_public);
         assert_eq!(send_ephemeral_public, recv_ephemeral_public);
-        let ephemeral_secret = recv::ephemeral_secret::<Sha256>(spend_key, R);
+        let ephemeral_secret = recv::ephemeral_secret::<Sha256>(spend_key, r_public);
         assert_eq!(ephemeral_secret * G, recv_ephemeral_public);
     }
 }
