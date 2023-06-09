@@ -6,34 +6,34 @@ use curve25519_dalek::RistrettoPoint;
 use curve25519_dalek::Scalar;
 use rand_core::CryptoRngCore;
 pub const G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
-pub struct PblcKeypair {
-    view: RistrettoPoint,
-    spnd: RistrettoPoint,
+pub struct StealthAddress {
+    s: RistrettoPoint,
+    b: RistrettoPoint,
 }
-pub struct ViewKeypair {
-    view: Scalar,
-    spnd: RistrettoPoint,
+pub struct ViewKey {
+    s: Scalar,
+    b: RistrettoPoint,
 }
-pub struct SpndKeypair {
-    view: Scalar,
-    spnd: Scalar,
+pub struct SpendKey {
+    s: Scalar,
+    b: Scalar,
 }
-impl SpndKeypair {
-    pub fn new(rng: &mut impl CryptoRngCore) -> SpndKeypair {
-        let view = scalar::random(rng);
-        let spnd = scalar::random(rng);
-        SpndKeypair { view, spnd }
+impl SpendKey {
+    pub fn new(rng: &mut impl CryptoRngCore) -> SpendKey {
+        let s = scalar::random(rng);
+        let b = scalar::random(rng);
+        SpendKey { s, b }
     }
-    pub fn address(&self) -> PblcKeypair {
-        PblcKeypair {
-            view: self.view * G,
-            spnd: self.spnd * G,
+    pub fn stealth_address(&self) -> StealthAddress {
+        StealthAddress {
+            s: self.s * G,
+            b: self.b * G,
         }
     }
-    pub fn view(&self) -> ViewKeypair {
-        ViewKeypair {
-            view: self.view,
-            spnd: self.spnd * G,
+    pub fn view_key(&self) -> ViewKey {
+        ViewKey {
+            s: self.s,
+            b: self.b * G,
         }
     }
 }
@@ -46,14 +46,14 @@ mod test {
     #[test]
     fn test() {
         let rng = &mut OsRng;
-        let spnd_keypair = SpndKeypair::new(rng);
-        let pblc_keypair = spnd_keypair.address();
-        let view_keypair = spnd_keypair.view();
+        let spend_key = SpendKey::new(rng);
+        let stealth_address = spend_key.stealth_address();
+        let view_key = spend_key.view_key();
         let (r, R) = send::r(rng);
-        let send_ephemeral_public = send::ephemeral_public::<Sha256>(pblc_keypair, r);
-        let recv_ephemeral_public = recv::ephemeral_public::<Sha256>(view_keypair, R);
+        let send_ephemeral_public = send::ephemeral_public::<Sha256>(stealth_address, r);
+        let recv_ephemeral_public = recv::ephemeral_public::<Sha256>(view_key, R);
         assert_eq!(send_ephemeral_public, recv_ephemeral_public);
-        let ephemeral_secret = recv::ephemeral_secret::<Sha256>(spnd_keypair, R);
+        let ephemeral_secret = recv::ephemeral_secret::<Sha256>(spend_key, R);
         assert_eq!(ephemeral_secret * G, recv_ephemeral_public);
     }
 }
