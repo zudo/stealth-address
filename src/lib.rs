@@ -1,86 +1,40 @@
+pub mod recv;
 pub mod scalar;
+pub mod send;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek::RistrettoPoint;
 use curve25519_dalek::Scalar;
-use digest::typenum::U32;
-use digest::Digest;
 use rand_core::CryptoRngCore;
 pub const G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct ViewSecret(Scalar);
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct ViewPublic(RistrettoPoint);
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct SpendSecret(Scalar);
-pub struct SpendPublic(RistrettoPoint);
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct RSecret(Scalar);
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct RPublic(RistrettoPoint);
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct CSecret(Scalar);
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct CPublic(RistrettoPoint);
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct EphemeralSecret(Scalar);
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub struct EphemeralPublic(RistrettoPoint);
-impl ViewSecret {
-    pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
-        Self(scalar::random(rng))
-    }
-    pub fn public(&self) -> ViewPublic {
-        ViewPublic(self.0 * G)
-    }
+pub struct PblcKeypair {
+    view: RistrettoPoint,
+    spnd: RistrettoPoint,
 }
-impl SpendSecret {
-    pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
-        Self(scalar::random(rng))
-    }
-    pub fn public(&self) -> SpendPublic {
-        SpendPublic(self.0 * G)
-    }
+pub struct ViewKeypair {
+    view: Scalar,
+    spnd: RistrettoPoint,
 }
-impl RSecret {
-    pub fn generate(rng: &mut impl CryptoRngCore) -> Self {
-        Self(scalar::random(rng))
-    }
-    pub fn public(&self) -> RPublic {
-        RPublic(self.0 * G)
-    }
+pub struct SpndKeypair {
+    view: Scalar,
+    spnd: Scalar,
 }
-impl CSecret {
-    // Sender uses this to generate the shared secret
-    pub fn from_sender<Hash: Digest<OutputSize = U32>>(rs: RSecret, vp: ViewPublic) -> Self {
-        Self(Self::hash::<Hash>(rs.0 * vp.0))
+impl SpndKeypair {
+    pub fn new(rng: &mut impl CryptoRngCore) -> SpndKeypair {
+        let view = scalar::random(rng);
+        let spnd = scalar::random(rng);
+        SpndKeypair { view, spnd }
     }
-    // Receiver uses this to generate the shared secret
-    pub fn from_receiver<Hash: Digest<OutputSize = U32>>(vs: ViewSecret, rp: RPublic) -> Self {
-        Self(Self::hash::<Hash>(vs.0 * rp.0))
+    pub fn address(&self) -> PblcKeypair {
+        PblcKeypair {
+            view: self.view * G,
+            spnd: self.spnd * G,
+        }
     }
-    pub fn public(&self) -> CPublic {
-        CPublic(self.0 * G)
-    }
-    fn hash<Hash: Digest<OutputSize = U32>>(p: RistrettoPoint) -> Scalar {
-        Scalar::from_bytes_mod_order(
-            Hash::new()
-                .chain_update(p.compress().as_bytes())
-                .finalize()
-                .into(),
-        )
-    }
-}
-impl EphemeralSecret {
-    pub fn from(cs: CSecret, ss: SpendSecret) -> Self {
-        Self(cs.0 + ss.0)
-    }
-    pub fn public(&self) -> EphemeralPublic {
-        EphemeralPublic(self.0 * G)
-    }
-}
-impl EphemeralPublic {
-    pub fn from(cp: CPublic, sp: SpendPublic) -> Self {
-        Self(cp.0 + sp.0)
+    pub fn view(&self) -> ViewKeypair {
+        ViewKeypair {
+            view: self.view,
+            spnd: self.spnd * G,
+        }
     }
 }
 #[cfg(test)]
@@ -92,19 +46,14 @@ mod test {
     #[test]
     fn test() {
         let rng = &mut OsRng;
-        let vs = ViewSecret::generate(rng);
-        let ss = SpendSecret::generate(rng);
-        let vp = vs.public();
-        let sp = ss.public();
-        let rs = RSecret::generate(rng);
-        let rp = rs.public();
-        let cs_0 = CSecret::from_sender::<Sha256>(rs, vp);
-        let cs_1 = CSecret::from_receiver::<Sha256>(vs, rp);
-        assert_eq!(cs_0, cs_1);
-        let cp = cs_0.public();
-        let es = EphemeralSecret::from(cs_0, ss);
-        let ep_0 = es.public();
-        let ep_1 = EphemeralPublic::from(cp, sp);
-        assert_eq!(ep_0, ep_1)
+        let spnd_keypair = SpndKeypair::new(rng);
+        let pblc_keypair = spnd_keypair.address();
+        let view_keypair = spnd_keypair.view();
+        let (r, R) = send::r(rng);
+        let send_ephemeral_public = send::ephemeral_public::<Sha256>(pblc_keypair, r);
+        let recv_ephemeral_public = recv::ephemeral_public::<Sha256>(view_keypair, R);
+        assert_eq!(send_ephemeral_public, recv_ephemeral_public);
+        let ephemeral_secret = recv::ephemeral_secret::<Sha256>(spnd_keypair, R);
+        assert_eq!(ephemeral_secret * G, recv_ephemeral_public);
     }
 }
