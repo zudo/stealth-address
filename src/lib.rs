@@ -7,9 +7,12 @@ use digest::typenum::U32;
 use digest::Digest;
 use rand_core::CryptoRngCore;
 pub const G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
-pub type R = RistrettoPoint;
-pub type Public = RistrettoPoint;
-pub type Secret = Scalar;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct R(pub RistrettoPoint);
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Public(pub RistrettoPoint);
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Secret(Scalar);
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StealthAddress {
     s: Public,
@@ -21,8 +24,10 @@ impl StealthAddress {
         rng: &mut impl CryptoRngCore,
     ) -> (R, Public) {
         let r = scalar::random(rng);
-        let c = scalar::point::<Hash>(r * self.s);
-        (r * G, c * G + self.b)
+        let c = scalar::point::<Hash>(r * self.s.0);
+        let public = Public(c * G + self.b.0);
+        let r = R(r * G);
+        (r, public)
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -32,8 +37,8 @@ pub struct ViewKey {
 }
 impl ViewKey {
     pub fn receive<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Public {
-        let c = scalar::point::<Hash>(self.s * r);
-        c * G + self.b
+        let c = scalar::point::<Hash>(self.s.0 * r.0);
+        Public(c * G + self.b.0)
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,25 +48,25 @@ pub struct SpendKey {
 }
 impl SpendKey {
     pub fn new(rng: &mut impl CryptoRngCore) -> SpendKey {
-        let s = scalar::random(rng);
-        let b = scalar::random(rng);
+        let s = Secret(scalar::random(rng));
+        let b = Secret(scalar::random(rng));
         SpendKey { s, b }
     }
     pub fn view_key(&self) -> ViewKey {
         ViewKey {
             s: self.s,
-            b: self.b * G,
+            b: Public(self.b.0 * G),
         }
     }
     pub fn stealth_address(&self) -> StealthAddress {
         StealthAddress {
-            s: self.s * G,
-            b: self.b * G,
+            s: Public(self.s.0 * G),
+            b: Public(self.b.0 * G),
         }
     }
     pub fn spend<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Secret {
-        let c = scalar::point::<Hash>(self.s * r);
-        c + self.b
+        let c = scalar::point::<Hash>(self.s.0 * r.0);
+        Secret(c + self.b.0)
     }
 }
 #[cfg(test)]
@@ -79,7 +84,7 @@ mod test {
         let public_1 = view_key.receive::<Sha256>(r);
         assert_eq!(public_0, public_1);
         let secret = spend_key.spend::<Sha256>(r);
-        let public_2 = secret * G;
+        let public_2 = Public(secret.0 * G);
         assert_eq!(public_1, public_2);
     }
 }
