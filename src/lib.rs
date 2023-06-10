@@ -1,6 +1,6 @@
 pub mod scalar;
-pub mod util;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::RistrettoPoint;
 use curve25519_dalek::Scalar;
 use digest::typenum::U32;
@@ -19,6 +19,21 @@ pub struct StealthAddress {
     b: RistrettoPoint,
 }
 impl StealthAddress {
+    pub fn to_bytes(&self) -> [u8; 64] {
+        let mut bytes = [0; 64];
+        bytes[..32].copy_from_slice(self.s.compress().as_bytes());
+        bytes[32..].copy_from_slice(self.b.compress().as_bytes());
+        bytes
+    }
+    pub fn from_slice(bytes: &[u8; 64]) -> Option<StealthAddress> {
+        let s = CompressedRistretto::from_slice(&bytes[..32])
+            .unwrap()
+            .decompress()?;
+        let b = CompressedRistretto::from_slice(&bytes[32..])
+            .unwrap()
+            .decompress()?;
+        Some(StealthAddress { s, b })
+    }
     pub fn send<Hash: Digest<OutputSize = U32>>(
         &self,
         rng: &mut impl CryptoRngCore,
@@ -36,6 +51,20 @@ pub struct ViewKey {
     b: RistrettoPoint,
 }
 impl ViewKey {
+    pub fn to_bytes(&self) -> [u8; 64] {
+        let mut bytes = [0; 64];
+        bytes[..32].copy_from_slice(self.s.as_bytes());
+        bytes[32..].copy_from_slice(self.b.compress().as_bytes());
+        bytes
+    }
+    pub fn from_slice(bytes: &[u8; 64]) -> Option<ViewKey> {
+        let s: Option<_> = Scalar::from_canonical_bytes(bytes[..32].try_into().unwrap()).into();
+        let s = s?;
+        let b = CompressedRistretto::from_slice(&bytes[32..])
+            .unwrap()
+            .decompress()?;
+        Some(ViewKey { s, b })
+    }
     pub fn receive<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Public {
         let c = scalar::point::<Hash>(self.s * r.0);
         Public(c * G + self.b)
@@ -47,6 +76,19 @@ pub struct SpendKey {
     b: Scalar,
 }
 impl SpendKey {
+    pub fn to_bytes(&self) -> [u8; 64] {
+        let mut bytes = [0; 64];
+        bytes[..32].copy_from_slice(self.s.as_bytes());
+        bytes[32..].copy_from_slice(self.b.as_bytes());
+        bytes
+    }
+    pub fn from_slice(bytes: &[u8; 64]) -> Option<SpendKey> {
+        let s: Option<_> = Scalar::from_canonical_bytes(bytes[..32].try_into().unwrap()).into();
+        let s = s?;
+        let b: Option<_> = Scalar::from_canonical_bytes(bytes[32..].try_into().unwrap()).into();
+        let b = b?;
+        Some(SpendKey { s, b })
+    }
     pub fn new(rng: &mut impl CryptoRngCore) -> SpendKey {
         let s = scalar::random(rng);
         let b = scalar::random(rng);
