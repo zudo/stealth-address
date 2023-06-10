@@ -1,9 +1,9 @@
 # Stealth address
 
-Stealth addresses using the ristretto group on curve25519.
-
 | DKSAP |
 |-|
+
+Stealth addresses using the ristretto group on curve25519.
 
 ## Usage
 
