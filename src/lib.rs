@@ -141,7 +141,7 @@ mod test {
     use rand_core::OsRng;
     use sha2::Sha256;
     #[test]
-    fn test() {
+    fn derive() {
         let rng = &mut OsRng;
         let spend_key = SpendKey::new(rng);
         let stealth_address = spend_key.stealth_address();
@@ -153,5 +153,29 @@ mod test {
         let public_2 = secret.public();
         assert_eq!(public_0, public_1);
         assert_eq!(public_1, public_2);
+    }
+    #[test]
+    fn to_bytes_from_slice() {
+        let rng = &mut OsRng;
+        let spend_key = SpendKey::new(rng);
+        let stealth_address = spend_key.stealth_address();
+        let view_key = spend_key.view_key();
+        let (r, public) = stealth_address.generate_ephemeral::<Sha256>(rng);
+        let secret = spend_key.derive_ephemeral_secret::<Sha256>(r);
+        let spend_key_bytes = spend_key.to_bytes();
+        let stealth_address_bytes = stealth_address.to_bytes();
+        let view_key_bytes = view_key.to_bytes();
+        let r_bytes = r.to_bytes();
+        let public_bytes = public.to_bytes();
+        let secret_bytes = secret.to_bytes();
+        assert_eq!(spend_key, SpendKey::from_slice(&spend_key_bytes).unwrap());
+        assert_eq!(
+            stealth_address,
+            StealthAddress::from_slice(&stealth_address_bytes).unwrap()
+        );
+        assert_eq!(view_key, ViewKey::from_slice(&view_key_bytes).unwrap());
+        assert_eq!(r, R::from_slice(&r_bytes).unwrap());
+        assert_eq!(public, Public::from_slice(&public_bytes).unwrap());
+        assert_eq!(secret, Secret::from_canonical(secret_bytes).unwrap());
     }
 }
