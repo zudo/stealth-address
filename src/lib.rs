@@ -1,6 +1,6 @@
+pub mod point;
 pub mod scalar;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::ristretto::CompressedRistretto;
 use curve25519_dalek::RistrettoPoint;
 use curve25519_dalek::Scalar;
 use digest::typenum::U32;
@@ -13,12 +13,18 @@ impl R {
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.compress().to_bytes()
     }
+    pub fn from_slice(bytes: &[u8; 32]) -> Option<R> {
+        Some(R(point::from_slice(bytes)?))
+    }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Public(RistrettoPoint);
 impl Public {
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.compress().to_bytes()
+    }
+    pub fn from_slice(bytes: &[u8; 32]) -> Option<Public> {
+        Some(Public(point::from_slice(bytes)?))
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -29,6 +35,9 @@ impl Secret {
     }
     pub fn as_bytes(&self) -> &[u8; 32] {
         self.0.as_bytes()
+    }
+    pub fn from_canonical(bytes: [u8; 32]) -> Option<Secret> {
+        Some(Secret(scalar::from_canonical(bytes)?))
     }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -44,12 +53,8 @@ impl StealthAddress {
         bytes
     }
     pub fn from_slice(bytes: &[u8; 64]) -> Option<StealthAddress> {
-        let s = CompressedRistretto::from_slice(&bytes[..32])
-            .unwrap()
-            .decompress()?;
-        let b = CompressedRistretto::from_slice(&bytes[32..])
-            .unwrap()
-            .decompress()?;
+        let s = point::from_slice(&bytes[..32].try_into().unwrap())?;
+        let b = point::from_slice(&bytes[32..].try_into().unwrap())?;
         Some(StealthAddress { s, b })
     }
     pub fn send<Hash: Digest<OutputSize = U32>>(
@@ -76,11 +81,8 @@ impl ViewKey {
         bytes
     }
     pub fn from_slice(bytes: &[u8; 64]) -> Option<ViewKey> {
-        let s: Option<_> = Scalar::from_canonical_bytes(bytes[..32].try_into().unwrap()).into();
-        let s = s?;
-        let b = CompressedRistretto::from_slice(&bytes[32..])
-            .unwrap()
-            .decompress()?;
+        let s = scalar::from_canonical(bytes[..32].try_into().unwrap())?;
+        let b = point::from_slice(&bytes[32..].try_into().unwrap())?;
         Some(ViewKey { s, b })
     }
     pub fn receive<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Public {
@@ -101,10 +103,8 @@ impl SpendKey {
         bytes
     }
     pub fn from_slice(bytes: &[u8; 64]) -> Option<SpendKey> {
-        let s: Option<_> = Scalar::from_canonical_bytes(bytes[..32].try_into().unwrap()).into();
-        let s = s?;
-        let b: Option<_> = Scalar::from_canonical_bytes(bytes[32..].try_into().unwrap()).into();
-        let b = b?;
+        let s = scalar::from_canonical(bytes[..32].try_into().unwrap())?;
+        let b = scalar::from_canonical(bytes[32..].try_into().unwrap())?;
         Some(SpendKey { s, b })
     }
     pub fn new(rng: &mut impl CryptoRngCore) -> SpendKey {

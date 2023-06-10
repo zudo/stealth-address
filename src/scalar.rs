@@ -15,3 +15,6 @@ pub fn point<Hash: Digest<OutputSize = U32>>(p: RistrettoPoint) -> Scalar {
         .into();
     Scalar::from_bytes_mod_order(bytes)
 }
+pub fn from_canonical(bytes: [u8; 32]) -> Option<Scalar> {
+    Scalar::from_canonical_bytes(bytes).into()
+}
