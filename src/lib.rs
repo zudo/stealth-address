@@ -92,6 +92,9 @@ impl ViewKey {
         let c = scalar::point::<Hash>(self.s * r.0);
         Public(c * G + self.b)
     }
+    pub fn check<Hash: Digest<OutputSize = U32>>(&self, r: R, public: Public) -> bool {
+        public == self.derive_ephemeral_public::<Hash>(r)
+    }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SpendKey {
@@ -144,6 +147,7 @@ mod test {
         let stealth_address = spend_key.stealth_address();
         let view_key = spend_key.view_key();
         let (r, public_0) = stealth_address.generate_ephemeral::<Sha256>(rng);
+        assert!(view_key.check::<Sha256>(r, public_0));
         let secret = spend_key.derive_ephemeral_secret::<Sha256>(r);
         let public_1 = view_key.derive_ephemeral_public::<Sha256>(r);
         let public_2 = secret.public();
