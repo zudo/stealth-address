@@ -9,10 +9,28 @@ use rand_core::CryptoRngCore;
 pub const G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct R(RistrettoPoint);
+impl R {
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.compress().to_bytes()
+    }
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Public(RistrettoPoint);
+impl Public {
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.compress().to_bytes()
+    }
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Secret(Scalar);
+impl Secret {
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_bytes()
+    }
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        self.0.as_bytes()
+    }
+}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StealthAddress {
     s: RistrettoPoint,
