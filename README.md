@@ -1,6 +1,6 @@
-# stealth-address
+# Stealth address
 
-Stealth addresses can be used to privately receive funds without revealing one's transaction history, i.e, how much money you have.
+Stealth addresses using the ristretto group on curve25519.
 
 | DKSAP |
 |-|
