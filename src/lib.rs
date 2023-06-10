@@ -39,6 +39,9 @@ impl Secret {
     pub fn from_canonical(bytes: [u8; 32]) -> Option<Secret> {
         Some(Secret(scalar::from_canonical(bytes)?))
     }
+    pub fn public(&self) -> Public {
+        Public(self.0 * G)
+    }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StealthAddress {
@@ -57,7 +60,7 @@ impl StealthAddress {
         let b = point::from_slice(&bytes[32..].try_into().unwrap())?;
         Some(StealthAddress { s, b })
     }
-    pub fn send<Hash: Digest<OutputSize = U32>>(
+    pub fn generate_ephemeral<Hash: Digest<OutputSize = U32>>(
         &self,
         rng: &mut impl CryptoRngCore,
     ) -> (R, Public) {
@@ -85,7 +88,7 @@ impl ViewKey {
         let b = point::from_slice(&bytes[32..].try_into().unwrap())?;
         Some(ViewKey { s, b })
     }
-    pub fn receive<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Public {
+    pub fn derive_ephemeral_public<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Public {
         let c = scalar::point::<Hash>(self.s * r.0);
         Public(c * G + self.b)
     }
@@ -124,7 +127,7 @@ impl SpendKey {
             b: self.b * G,
         }
     }
-    pub fn spend<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Secret {
+    pub fn derive_ephemeral_secret<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Secret {
         let c = scalar::point::<Hash>(self.s * r.0);
         Secret(c + self.b)
     }
@@ -140,11 +143,11 @@ mod test {
         let spend_key = SpendKey::new(rng);
         let stealth_address = spend_key.stealth_address();
         let view_key = spend_key.view_key();
-        let (r, public_0) = stealth_address.send::<Sha256>(rng);
-        let public_1 = view_key.receive::<Sha256>(r);
+        let (r, public_0) = stealth_address.generate_ephemeral::<Sha256>(rng);
+        let secret = spend_key.derive_ephemeral_secret::<Sha256>(r);
+        let public_1 = view_key.derive_ephemeral_public::<Sha256>(r);
+        let public_2 = secret.public();
         assert_eq!(public_0, public_1);
-        let secret = spend_key.spend::<Sha256>(r);
-        let public_2 = Public(secret.0 * G);
         assert_eq!(public_1, public_2);
     }
 }
