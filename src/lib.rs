@@ -1,47 +1,28 @@
-pub mod point;
-pub mod scalar;
 use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::RistrettoPoint;
-use curve25519_dalek::Scalar;
+use curve25519_dalek::ristretto::CompressedRistretto;
+pub use curve25519_dalek::RistrettoPoint;
+pub use curve25519_dalek::Scalar;
 use digest::typenum::U32;
 use digest::Digest;
 use rand_core::CryptoRngCore;
 pub const G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct R(RistrettoPoint);
-impl R {
-    pub fn to_bytes(&self) -> [u8; 32] {
-        self.0.compress().to_bytes()
-    }
-    pub fn from_slice(bytes: &[u8; 32]) -> Option<R> {
-        Some(R(point::from_slice(bytes)?))
-    }
+pub fn point_from_slice(bytes: &[u8; 32]) -> Option<RistrettoPoint> {
+    CompressedRistretto::from_slice(bytes).unwrap().decompress()
 }
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Public(RistrettoPoint);
-impl Public {
-    pub fn to_bytes(&self) -> [u8; 32] {
-        self.0.compress().to_bytes()
-    }
-    pub fn from_slice(bytes: &[u8; 32]) -> Option<Public> {
-        Some(Public(point::from_slice(bytes)?))
-    }
+pub fn scalar_random(rng: &mut impl CryptoRngCore) -> Scalar {
+    let mut bytes = [0u8; 32];
+    rng.fill_bytes(&mut bytes);
+    Scalar::from_bytes_mod_order(bytes)
 }
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Secret(Scalar);
-impl Secret {
-    pub fn to_bytes(&self) -> [u8; 32] {
-        self.0.to_bytes()
-    }
-    pub fn as_bytes(&self) -> &[u8; 32] {
-        self.0.as_bytes()
-    }
-    pub fn from_canonical(bytes: [u8; 32]) -> Option<Secret> {
-        Some(Secret(scalar::from_canonical(bytes)?))
-    }
-    pub fn public(&self) -> Public {
-        Public(self.0 * G)
-    }
+pub fn scalar_point<Hash: Digest<OutputSize = U32>>(p: RistrettoPoint) -> Scalar {
+    let bytes = Hash::new()
+        .chain_update(p.compress().as_bytes())
+        .finalize()
+        .into();
+    Scalar::from_bytes_mod_order(bytes)
+}
+pub fn scalar_from_canonical(bytes: [u8; 32]) -> Option<Scalar> {
+    Scalar::from_canonical_bytes(bytes).into()
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StealthAddress {
@@ -56,18 +37,18 @@ impl StealthAddress {
         bytes
     }
     pub fn from_slice(bytes: &[u8; 64]) -> Option<StealthAddress> {
-        let s = point::from_slice(&bytes[..32].try_into().unwrap())?;
-        let b = point::from_slice(&bytes[32..].try_into().unwrap())?;
+        let s = point_from_slice(&bytes[..32].try_into().unwrap())?;
+        let b = point_from_slice(&bytes[32..].try_into().unwrap())?;
         Some(StealthAddress { s, b })
     }
     pub fn generate_ephemeral<Hash: Digest<OutputSize = U32>>(
         &self,
         rng: &mut impl CryptoRngCore,
-    ) -> (R, Public) {
-        let r = scalar::random(rng);
-        let c = scalar::point::<Hash>(r * self.s);
-        let public = Public(c * G + self.b);
-        let r = R(r * G);
+    ) -> (RistrettoPoint, RistrettoPoint) {
+        let r = scalar_random(rng);
+        let c = scalar_point::<Hash>(r * self.s);
+        let public = c * G + self.b;
+        let r = r * G;
         (r, public)
     }
 }
@@ -84,15 +65,22 @@ impl ViewKey {
         bytes
     }
     pub fn from_slice(bytes: &[u8; 64]) -> Option<ViewKey> {
-        let s = scalar::from_canonical(bytes[..32].try_into().unwrap())?;
-        let b = point::from_slice(&bytes[32..].try_into().unwrap())?;
+        let s = scalar_from_canonical(bytes[..32].try_into().unwrap())?;
+        let b = point_from_slice(&bytes[32..].try_into().unwrap())?;
         Some(ViewKey { s, b })
     }
-    pub fn derive_ephemeral_public<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Public {
-        let c = scalar::point::<Hash>(self.s * r.0);
-        Public(c * G + self.b)
+    pub fn derive_ephemeral_public<Hash: Digest<OutputSize = U32>>(
+        &self,
+        r: RistrettoPoint,
+    ) -> RistrettoPoint {
+        let c = scalar_point::<Hash>(self.s * r);
+        c * G + self.b
     }
-    pub fn check<Hash: Digest<OutputSize = U32>>(&self, r: R, public: Public) -> bool {
+    pub fn check<Hash: Digest<OutputSize = U32>>(
+        &self,
+        r: RistrettoPoint,
+        public: RistrettoPoint,
+    ) -> bool {
         public == self.derive_ephemeral_public::<Hash>(r)
     }
 }
@@ -109,13 +97,13 @@ impl SpendKey {
         bytes
     }
     pub fn from_slice(bytes: &[u8; 64]) -> Option<SpendKey> {
-        let s = scalar::from_canonical(bytes[..32].try_into().unwrap())?;
-        let b = scalar::from_canonical(bytes[32..].try_into().unwrap())?;
+        let s = scalar_from_canonical(bytes[..32].try_into().unwrap())?;
+        let b = scalar_from_canonical(bytes[32..].try_into().unwrap())?;
         Some(SpendKey { s, b })
     }
     pub fn new(rng: &mut impl CryptoRngCore) -> SpendKey {
-        let s = scalar::random(rng);
-        let b = scalar::random(rng);
+        let s = scalar_random(rng);
+        let b = scalar_random(rng);
         SpendKey { s, b }
     }
     pub fn view_key(&self) -> ViewKey {
@@ -130,9 +118,12 @@ impl SpendKey {
             b: self.b * G,
         }
     }
-    pub fn derive_ephemeral_secret<Hash: Digest<OutputSize = U32>>(&self, r: R) -> Secret {
-        let c = scalar::point::<Hash>(self.s * r.0);
-        Secret(c + self.b)
+    pub fn derive_ephemeral_secret<Hash: Digest<OutputSize = U32>>(
+        &self,
+        r: RistrettoPoint,
+    ) -> Scalar {
+        let c = scalar_point::<Hash>(self.s * r);
+        c + self.b
     }
 }
 #[cfg(test)]
@@ -150,7 +141,7 @@ mod tests {
         assert!(view_key.check::<Sha256>(r, public_0));
         let secret = spend_key.derive_ephemeral_secret::<Sha256>(r);
         let public_1 = view_key.derive_ephemeral_public::<Sha256>(r);
-        let public_2 = secret.public();
+        let public_2 = secret * G;
         assert_eq!(public_0, public_1);
         assert_eq!(public_1, public_2);
     }
@@ -165,8 +156,8 @@ mod tests {
         let spend_key_bytes = spend_key.to_bytes();
         let stealth_address_bytes = stealth_address.to_bytes();
         let view_key_bytes = view_key.to_bytes();
-        let r_bytes = r.to_bytes();
-        let public_bytes = public.to_bytes();
+        let r_bytes = r.compress().to_bytes();
+        let public_bytes = public.compress().to_bytes();
         let secret_bytes = secret.to_bytes();
         assert_eq!(spend_key, SpendKey::from_slice(&spend_key_bytes).unwrap());
         assert_eq!(
@@ -174,8 +165,8 @@ mod tests {
             StealthAddress::from_slice(&stealth_address_bytes).unwrap()
         );
         assert_eq!(view_key, ViewKey::from_slice(&view_key_bytes).unwrap());
-        assert_eq!(r, R::from_slice(&r_bytes).unwrap());
-        assert_eq!(public, Public::from_slice(&public_bytes).unwrap());
-        assert_eq!(secret, Secret::from_canonical(secret_bytes).unwrap());
+        assert_eq!(r, point_from_slice(&r_bytes).unwrap());
+        assert_eq!(public, point_from_slice(&public_bytes).unwrap());
+        assert_eq!(secret, scalar_from_canonical(secret_bytes).unwrap());
     }
 }
