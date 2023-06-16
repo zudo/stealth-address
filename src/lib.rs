@@ -1,11 +1,10 @@
-use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
-use curve25519_dalek::ristretto::CompressedRistretto;
+pub use curve25519_dalek::constants::RISTRETTO_BASEPOINT_POINT;
+pub use curve25519_dalek::ristretto::CompressedRistretto;
 pub use curve25519_dalek::RistrettoPoint;
 pub use curve25519_dalek::Scalar;
-use digest::typenum::U32;
-use digest::Digest;
-use rand_core::CryptoRngCore;
-pub const G: RistrettoPoint = RISTRETTO_BASEPOINT_POINT;
+pub use digest::typenum::U32;
+pub use digest::Digest;
+pub use rand_core::CryptoRngCore;
 pub fn point_from_slice(bytes: &[u8; 32]) -> Option<RistrettoPoint> {
     CompressedRistretto::from_slice(bytes).unwrap().decompress()
 }
@@ -47,8 +46,8 @@ impl StealthAddress {
     ) -> (RistrettoPoint, RistrettoPoint) {
         let r = scalar_random(rng);
         let c = scalar_point::<Hash>(r * self.s);
-        let public = c * G + self.b;
-        let r = r * G;
+        let public = c * RISTRETTO_BASEPOINT_POINT + self.b;
+        let r = r * RISTRETTO_BASEPOINT_POINT;
         (r, public)
     }
 }
@@ -74,7 +73,7 @@ impl ViewKey {
         r: RistrettoPoint,
     ) -> RistrettoPoint {
         let c = scalar_point::<Hash>(self.s * r);
-        c * G + self.b
+        c * RISTRETTO_BASEPOINT_POINT + self.b
     }
     pub fn check<Hash: Digest<OutputSize = U32>>(
         &self,
@@ -109,13 +108,13 @@ impl SpendKey {
     pub fn view_key(&self) -> ViewKey {
         ViewKey {
             s: self.s,
-            b: self.b * G,
+            b: self.b * RISTRETTO_BASEPOINT_POINT,
         }
     }
     pub fn stealth_address(&self) -> StealthAddress {
         StealthAddress {
-            s: self.s * G,
-            b: self.b * G,
+            s: self.s * RISTRETTO_BASEPOINT_POINT,
+            b: self.b * RISTRETTO_BASEPOINT_POINT,
         }
     }
     pub fn derive_ephemeral_secret<Hash: Digest<OutputSize = U32>>(
@@ -141,7 +140,7 @@ mod tests {
         assert!(view_key.check::<Sha256>(r, public_0));
         let secret = spend_key.derive_ephemeral_secret::<Sha256>(r);
         let public_1 = view_key.derive_ephemeral_public::<Sha256>(r);
-        let public_2 = secret * G;
+        let public_2 = secret * RISTRETTO_BASEPOINT_POINT;
         assert_eq!(public_0, public_1);
         assert_eq!(public_1, public_2);
     }
