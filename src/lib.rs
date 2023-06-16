@@ -13,7 +13,7 @@ pub fn scalar_random(rng: &mut impl CryptoRngCore) -> Scalar {
     rng.fill_bytes(&mut bytes);
     Scalar::from_bytes_mod_order(bytes)
 }
-pub fn scalar_point<Hash: Digest<OutputSize = U32>>(p: RistrettoPoint) -> Scalar {
+pub fn point_hash_to_scalar<Hash: Digest<OutputSize = U32>>(p: RistrettoPoint) -> Scalar {
     let bytes = Hash::new()
         .chain_update(p.compress().as_bytes())
         .finalize()
@@ -45,7 +45,7 @@ impl StealthAddress {
         rng: &mut impl CryptoRngCore,
     ) -> (RistrettoPoint, RistrettoPoint) {
         let r = scalar_random(rng);
-        let c = scalar_point::<Hash>(r * self.s);
+        let c = point_hash_to_scalar::<Hash>(r * self.s);
         let public = c * RISTRETTO_BASEPOINT_POINT + self.b;
         let r = r * RISTRETTO_BASEPOINT_POINT;
         (r, public)
@@ -72,7 +72,7 @@ impl ViewKey {
         &self,
         r: RistrettoPoint,
     ) -> RistrettoPoint {
-        let c = scalar_point::<Hash>(self.s * r);
+        let c = point_hash_to_scalar::<Hash>(self.s * r);
         c * RISTRETTO_BASEPOINT_POINT + self.b
     }
     pub fn check<Hash: Digest<OutputSize = U32>>(
@@ -121,7 +121,7 @@ impl SpendKey {
         &self,
         r: RistrettoPoint,
     ) -> Scalar {
-        let c = scalar_point::<Hash>(self.s * r);
+        let c = point_hash_to_scalar::<Hash>(self.s * r);
         c + self.b
     }
 }
